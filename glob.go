@@ -2,8 +2,11 @@ package ohmyglob
 
 import (
 	"bytes"
+	"io"
 	"regexp"
 	"strings"
+
+	log "github.com/cihub/seelog"
 )
 
 const globStarComponent = ".*"
@@ -26,6 +29,8 @@ type Glob struct {
 	globPattern string
 	// State only available during parsing
 	parserState *parserState
+	// Set to true if the pattern was negated
+	negated bool
 }
 
 // GlobOptions
@@ -49,6 +54,30 @@ func (g *Glob) String() string {
 	return g.globPattern
 }
 
+func (g *Glob) Match(b []byte) bool {
+	if g.negated {
+		return !g.Regexp.Match(b)
+	} else {
+		return g.Regexp.Match(b)
+	}
+}
+
+func (g *Glob) MatchReader(r io.RuneReader) bool {
+	if g.negated {
+		return !g.Regexp.MatchReader(r)
+	} else {
+		return g.Regexp.MatchReader(r)
+	}
+}
+
+func (g *Glob) MatchString(s string) bool {
+	if g.negated {
+		return !g.Regexp.MatchString(s)
+	} else {
+		return g.Regexp.MatchString(s)
+	}
+}
+
 func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {
@@ -58,6 +87,7 @@ func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 	glob := &Glob{
 		Regexp:      nil,
 		globPattern: pattern,
+		negated:     false,
 		parserState: &parserState{
 			regexBuffer:              new(bytes.Buffer),
 			lastComponentWasGlobStar: false,
@@ -70,13 +100,18 @@ func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 		glob.parserState.regexBuffer.WriteRune('^')
 	}
 
+	var err error
 	// Transform into a regular expression pattern
 	// 1. Parse negation prefixes
+	pattern, err = parseNegation(pattern, glob)
+	if err != nil {
+		return nil, err
+	}
 
 	// 2. Split into a series of path portion matches
 	components := strings.Split(pattern, string(options.Separator))
-	for _, component := range components {
-		err := parseComponent(component, glob)
+	for idx, component := range components {
+		err = parseComponent(component, idx, glob)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +121,9 @@ func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 		glob.parserState.regexBuffer.WriteRune('$')
 	}
 
-	re, err := regexp.Compile(glob.parserState.regexBuffer.String())
+	regexString := glob.parserState.regexBuffer.String()
+	log.Debugf("Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
+	re, err := regexp.Compile(regexString)
 	if err != nil {
 		return nil, err
 	}
@@ -97,18 +134,46 @@ func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 	return glob, nil
 }
 
-func parseComponent(component string, glob *Glob) error {
-	if component == "**" {
-		if glob.parserState.lastComponentWasGlobStar {
-			return nil
-		} else {
-			glob.parserState.regexBuffer.WriteString(globStarComponent)
-			glob.parserState.lastComponentWasGlobStar = true
-			return nil
-		}
-	} else {
-		glob.parserState.regexBuffer.WriteString(escapeRegexComponent(component))
-		glob.parserState.lastComponentWasGlobStar = false
-		return nil
+func parseNegation(pattern string, glob *Glob) (string, error) {
+	if pattern == "" {
+		return pattern, nil
 	}
+
+	negations := 0
+	for _, char := range pattern {
+		if char == '!' {
+			glob.negated = !glob.negated
+			negations++
+		}
+	}
+
+	return pattern[negations:], nil
+}
+
+func parseComponent(component string, idx int, glob *Glob) error {
+	isGlobStar := false
+	buf := glob.parserState.regexBuffer
+
+	if component == "**" {
+		isGlobStar = true
+		// Only add another globstar if the last component wasn't a globstar
+		if !glob.parserState.lastComponentWasGlobStar {
+			buf.WriteString(globStarComponent)
+		}
+	} else if component == "*" {
+		if idx != 0 {
+			buf.WriteString(glob.parserState.escapedSeparator)
+		}
+		buf.WriteString("[^")
+		buf.WriteString(glob.parserState.escapedSeparator)
+		buf.WriteString("]*")
+	} else {
+		if idx != 0 {
+			buf.WriteString(glob.parserState.escapedSeparator)
+		}
+		buf.WriteString(escapeRegexComponent(component))
+	}
+
+	glob.parserState.lastComponentWasGlobStar = isGlobStar
+	return nil
 }

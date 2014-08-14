@@ -11,8 +11,12 @@ func TestSimpleGlob(t *testing.T) {
 	glob, err := NewGlob(pattern, nil)
 	assert.NoError(t, err)
 
-	match := "foo.baz.boo/zoo.bar"
+	match := "foo.baz.bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo.baz∆˙¨®˙¨¥ƒ®†˙ƒ†¨®†√˙.bar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo.bar"
+	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
 func TestGlobStar(t *testing.T) {
@@ -76,4 +80,19 @@ func TestNoMatchAtEnd(t *testing.T) {
 	// Test that a prefix and a suffix does not
 	match = "bar.baz.foo.boop"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
+}
+
+// Check that negations work
+func TestNegation(t *testing.T) {
+	pattern := "!foo"
+	glob, err := NewGlob(pattern, nil)
+	assert.NoError(t, err)
+
+	// Test without a prefix still works
+	match := "foo"
+	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
+
+	// Test with a prefix still works
+	match = "foo.bar.baz"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 }
