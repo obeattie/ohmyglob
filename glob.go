@@ -21,8 +21,19 @@ type parserState struct {
 	escapedSeparator string
 }
 
+type Glob interface {
+	// String returns the pattern that was used to create the Glob
+	String() string
+	// Match reports whether the Regexp matches the byte slice b
+	Match(b []byte) bool
+	// MatchReader reports whether the Regexp matches the text read by the RuneReader
+	MatchReader(r io.RuneReader) bool
+	// MatchString reports whether the Regexp matches the string s
+	MatchString(s string) bool
+}
+
 // Glob is a glob pattern that has been compiled into a regular expression
-type Glob struct {
+type globImpl struct {
 	*regexp.Regexp
 	// The separator from options, escaped for appending to the regexBuffer (only available during parsing)
 	// The input pattern
@@ -49,12 +60,11 @@ var DefaultGlobOptions *GlobOptions = &GlobOptions{
 	MatchAtEnd:   true,
 }
 
-// String returns the string that was used to create the Glob.
-func (g *Glob) String() string {
+func (g *globImpl) String() string {
 	return g.globPattern
 }
 
-func (g *Glob) Match(b []byte) bool {
+func (g *globImpl) Match(b []byte) bool {
 	if g.negated {
 		return !g.Regexp.Match(b)
 	} else {
@@ -62,7 +72,7 @@ func (g *Glob) Match(b []byte) bool {
 	}
 }
 
-func (g *Glob) MatchReader(r io.RuneReader) bool {
+func (g *globImpl) MatchReader(r io.RuneReader) bool {
 	if g.negated {
 		return !g.Regexp.MatchReader(r)
 	} else {
@@ -70,7 +80,7 @@ func (g *Glob) MatchReader(r io.RuneReader) bool {
 	}
 }
 
-func (g *Glob) MatchString(s string) bool {
+func (g *globImpl) MatchString(s string) bool {
 	if g.negated {
 		return !g.Regexp.MatchString(s)
 	} else {
@@ -78,13 +88,13 @@ func (g *Glob) MatchString(s string) bool {
 	}
 }
 
-func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
+func NewGlob(pattern string, options *GlobOptions) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {
 		options = DefaultGlobOptions
 	}
 
-	glob := &Glob{
+	glob := &globImpl{
 		Regexp:      nil,
 		globPattern: pattern,
 		negated:     false,
@@ -134,7 +144,7 @@ func NewGlob(pattern string, options *GlobOptions) (*Glob, error) {
 	return glob, nil
 }
 
-func parseNegation(pattern string, glob *Glob) (string, error) {
+func parseNegation(pattern string, glob *globImpl) (string, error) {
 	if pattern == "" {
 		return pattern, nil
 	}
@@ -150,7 +160,7 @@ func parseNegation(pattern string, glob *Glob) (string, error) {
 	return pattern[negations:], nil
 }
 
-func parseComponent(component string, idx int, glob *Glob) error {
+func parseComponent(component string, idx int, glob *globImpl) error {
 	isGlobStar := false
 	buf := glob.parserState.regexBuffer
 
