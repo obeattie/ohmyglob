@@ -44,7 +44,7 @@ type GlobOptions struct {
 }
 
 var DefaultGlobOptions *GlobOptions = &GlobOptions{
-	Separator:    '.',
+	Separator:    '/',
 	MatchAtStart: true,
 	MatchAtEnd:   true,
 }

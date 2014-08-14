@@ -7,32 +7,32 @@ import (
 )
 
 func TestSimpleGlob(t *testing.T) {
-	pattern := "foo.*.bar"
+	pattern := "foo/*/bar"
 	glob, err := NewGlob(pattern, nil)
 	assert.NoError(t, err)
 
-	match := "foo.baz.bar"
+	match := "foo/baz/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "foo.baz∆˙¨®˙¨¥ƒ®†˙ƒ†¨®†√˙.bar"
+	match = "foo/baz∆˙¨®˙¨¥ƒ®†˙ƒ†¨®†√˙/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "foo.bar"
+	match = "foo/bar"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
 func TestGlobStar(t *testing.T) {
-	pattern := "foo.**.bar"
+	pattern := "foo/**/bar"
 	glob, err := NewGlob(pattern, nil)
 	assert.NoError(t, err)
 
-	match := "foo.bar"
+	match := "foo/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "foo.baz.bar"
+	match = "foo/baz/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "foo.baz.boop.bar"
+	match = "foo/baz/boop/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "foo.baz.boop.µ∂^~®˙¨˙çƒ®†¨^.bar"
+	match = "foo/baz/boop/µ∂^~®˙¨˙çƒ®†¨^/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
-	match = "thisistotal.garbage.ÔÔÈ´^¨∆~∆≈∆∫"
+	match = "thisistotal/garbage/ÔÔÈ´^¨∆~∆≈∆∫"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
@@ -51,11 +51,11 @@ func TestNoMatchAtStart(t *testing.T) {
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 
 	// Test with a prefix still works
-	match = "bar.baz.foo"
+	match = "bar/baz/foo"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 
 	// Test that a prefix and a suffix does not
-	match = "bar.baz.foo.boop"
+	match = "bar/baz/foo/boop"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
@@ -69,30 +69,46 @@ func TestNoMatchAtEnd(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Test without a prefix still works
+	// Test without a suffix still works
 	match := "foo"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 
-	// Test with a prefix still works
-	match = "foo.bar.baz"
+	// Test with a suffix still works
+	match = "foo/bar/baz"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 
 	// Test that a prefix and a suffix does not
-	match = "bar.baz.foo.boop"
+	match = "bar/baz/foo/boop"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
-// Check that negations work
 func TestNegation(t *testing.T) {
 	pattern := "!foo"
 	glob, err := NewGlob(pattern, nil)
 	assert.NoError(t, err)
 
-	// Test without a prefix still works
+	// Test it negates the exact string
 	match := "foo"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 
-	// Test with a prefix still works
+	// Should match not that exact string
 	match = "foo.bar.baz"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+}
+
+func TestCustomSeparator(t *testing.T) {
+	pattern := "foo.*.bar"
+	glob, err := NewGlob(pattern, &GlobOptions{
+		Separator:    '.',
+		MatchAtStart: DefaultGlobOptions.MatchAtStart,
+		MatchAtEnd:   DefaultGlobOptions.MatchAtEnd,
+	})
+	assert.NoError(t, err)
+
+	match := "foo.baz.bar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo.baz∆˙¨®˙¨¥ƒ®†˙ƒ†¨®†√˙.bar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo.bar"
+	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
