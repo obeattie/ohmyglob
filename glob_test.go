@@ -8,7 +8,7 @@ import (
 
 func TestSimpleGlob(t *testing.T) {
 	pattern := "foo/*/bar"
-	glob, err := NewGlob(pattern, nil)
+	glob, err := CompileGlob(pattern, nil)
 	assert.NoError(t, err)
 
 	match := "foo/baz/bar"
@@ -21,7 +21,7 @@ func TestSimpleGlob(t *testing.T) {
 
 func TestGlobStar(t *testing.T) {
 	pattern := "foo/**/bar"
-	glob, err := NewGlob(pattern, nil)
+	glob, err := CompileGlob(pattern, nil)
 	assert.NoError(t, err)
 
 	match := "foo/bar"
@@ -39,7 +39,7 @@ func TestGlobStar(t *testing.T) {
 // Check that setting MatchAtStart to false allows any prefix
 func TestNoMatchAtStart(t *testing.T) {
 	pattern := "foo"
-	glob, err := NewGlob(pattern, &GlobOptions{
+	glob, err := CompileGlob(pattern, &GlobOptions{
 		Separator:    DefaultGlobOptions.Separator,
 		MatchAtStart: false,
 		MatchAtEnd:   DefaultGlobOptions.MatchAtEnd,
@@ -62,7 +62,7 @@ func TestNoMatchAtStart(t *testing.T) {
 // Check that setting MatchAtStart to false allows any suffix
 func TestNoMatchAtEnd(t *testing.T) {
 	pattern := "foo"
-	glob, err := NewGlob(pattern, &GlobOptions{
+	glob, err := CompileGlob(pattern, &GlobOptions{
 		Separator:    DefaultGlobOptions.Separator,
 		MatchAtStart: DefaultGlobOptions.MatchAtStart,
 		MatchAtEnd:   false,
@@ -84,21 +84,24 @@ func TestNoMatchAtEnd(t *testing.T) {
 
 func TestNegation(t *testing.T) {
 	pattern := "!foo"
-	glob, err := NewGlob(pattern, nil)
+	glob, err := CompileGlob(pattern, nil)
 	assert.NoError(t, err)
+	assert.True(t, glob.IsNegative(), "Glob should be negative")
 
-	// Test it negates the exact string
+	// Test it negates the exact string (it should report a match, though it is negative)
 	match := "foo"
-	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
-
-	// Should match not that exact string
-	match = "foo.bar.baz"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+
+	// Should not match other strings
+	match = "foo.bar.baz"
+	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
+	match = "h4ughfrfg4598yf5uh"
+	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 }
 
 func TestCustomSeparator(t *testing.T) {
 	pattern := "foo.*.bar"
-	glob, err := NewGlob(pattern, &GlobOptions{
+	glob, err := CompileGlob(pattern, &GlobOptions{
 		Separator:    '.',
 		MatchAtStart: DefaultGlobOptions.MatchAtStart,
 		MatchAtEnd:   DefaultGlobOptions.MatchAtEnd,

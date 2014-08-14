@@ -21,15 +21,21 @@ type parserState struct {
 	escapedSeparator string
 }
 
+type GlobMatcher interface {
+	// Match reports whether the Glob matches the byte slice b
+	Match(b []byte) bool
+	// MatchReader reports whether the Glob matches the text read by the RuneReader
+	MatchReader(r io.RuneReader) bool
+	// MatchString reports whether the Glob matches the string s
+	MatchString(s string) bool
+}
+
 type Glob interface {
+	GlobMatcher
 	// String returns the pattern that was used to create the Glob
 	String() string
-	// Match reports whether the Regexp matches the byte slice b
-	Match(b []byte) bool
-	// MatchReader reports whether the Regexp matches the text read by the RuneReader
-	MatchReader(r io.RuneReader) bool
-	// MatchString reports whether the Regexp matches the string s
-	MatchString(s string) bool
+	// IsNegative returns whether the pattern was negated (prefixed with !)
+	IsNegative() bool
 }
 
 // Glob is a glob pattern that has been compiled into a regular expression
@@ -64,31 +70,11 @@ func (g *globImpl) String() string {
 	return g.globPattern
 }
 
-func (g *globImpl) Match(b []byte) bool {
-	if g.negated {
-		return !g.Regexp.Match(b)
-	} else {
-		return g.Regexp.Match(b)
-	}
+func (g *globImpl) IsNegative() bool {
+	return g.negated
 }
 
-func (g *globImpl) MatchReader(r io.RuneReader) bool {
-	if g.negated {
-		return !g.Regexp.MatchReader(r)
-	} else {
-		return g.Regexp.MatchReader(r)
-	}
-}
-
-func (g *globImpl) MatchString(s string) bool {
-	if g.negated {
-		return !g.Regexp.MatchString(s)
-	} else {
-		return g.Regexp.MatchString(s)
-	}
-}
-
-func NewGlob(pattern string, options *GlobOptions) (Glob, error) {
+func CompileGlob(pattern string, options *GlobOptions) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {
 		options = DefaultGlobOptions
@@ -132,7 +118,7 @@ func NewGlob(pattern string, options *GlobOptions) (Glob, error) {
 	}
 
 	regexString := glob.parserState.regexBuffer.String()
-	log.Debugf("Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
+	log.Debugf("[Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
 	re, err := regexp.Compile(regexString)
 	if err != nil {
 		return nil, err
