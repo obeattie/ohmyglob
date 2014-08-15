@@ -16,6 +16,7 @@ used to match strings.
 * `?` matches a single character, but not the separator
 * `!` at the beginning of a pattern will negate the match
 * ["Globstar"](http://www.linuxjournal.com/content/globstar-new-bash-globbing-option) (`**`) matching
+* Glob sets allow matching against a set of ordered globs, with precedence to later matches
 
 ## Usage
 
