@@ -5,3 +5,10 @@ go:
 
 install:
   - go get -v -t ./...
+  - go get github.com/golang/lint/golint
+  - go get code.google.com/p/go.tools/cmd/vet
+
+script:
+  - go vet ./...
+  - go test -v ./...
+  - golint .
