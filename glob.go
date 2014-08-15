@@ -1,3 +1,4 @@
+// Package ohmyglob provides a minimal glob matching utility.
 package ohmyglob
 
 import (
@@ -15,10 +16,10 @@ import (
 const globStarComponent = ".+"
 
 var (
-	expanders = []rune{'?', '*'}
 	// Logger is used to log trace-level info; logging is completely disabled by default but can be changed by replacing
 	// this with a configured logger
-	Logger log.LoggerInterface
+	Logger    log.LoggerInterface
+	expanders = []rune{'?', '*'}
 )
 
 func init() {
@@ -41,6 +42,8 @@ type parserState struct {
 	escapedSeparator string
 }
 
+// GlobMatcher is the basic interface provided by a Glob or GlobSet, which provides a Regexp-style interface for
+// checking matches.
 type GlobMatcher interface {
 	// Match reports whether the Glob matches the byte slice b
 	Match(b []byte) bool
@@ -50,6 +53,7 @@ type GlobMatcher interface {
 	MatchString(s string) bool
 }
 
+// A single glob pattern; implements GlobMatcher. A Glob is immutable.
 type Glob interface {
 	GlobMatcher
 	// String returns the pattern that was used to create the Glob
@@ -58,7 +62,7 @@ type Glob interface {
 	IsNegative() bool
 }
 
-// Glob is a glob pattern that has been compiled into a regular expression
+// Glob is a glob pattern that has been compiled into a regular expression.
 type globImpl struct {
 	*regexp.Regexp
 	// The separator from options, escaped for appending to the regexBuffer (only available during parsing)
@@ -93,6 +97,8 @@ func (g *globImpl) IsNegative() bool {
 	return g.negated
 }
 
+// Compile parses the given glob pattern and convertes it to a Glob. If no options are given, the DefaultOptions are
+// used.
 func Compile(pattern string, options *Options) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {

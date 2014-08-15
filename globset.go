@@ -74,7 +74,7 @@ func (g globSetImpl) MatchString(s string) bool {
 	return g.Match([]byte(s))
 }
 
-// NewGlobSet constructs a GlobSet from a slice of Globs
+// NewGlobSet constructs a GlobSet from a slice of Globs.
 func NewGlobSet(globs []Glob) (GlobSet, error) {
 	set := make(globSetImpl, len(globs))
 	for i, glob := range globs {
@@ -83,7 +83,7 @@ func NewGlobSet(globs []Glob) (GlobSet, error) {
 	return set, nil
 }
 
-// CompileGlobSet constructs a GlobSet from a slice of strings, which will be compiled individually to Globs
+// CompileGlobSet constructs a GlobSet from a slice of strings, which will be compiled individually to Globs.
 func CompileGlobSet(patterns []string, options *Options) (GlobSet, error) {
 	globs := make(globSetImpl, len(patterns))
 	for i, pattern := range patterns {
