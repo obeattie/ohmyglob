@@ -3,14 +3,14 @@ package ohmyglob
 import (
 	"io"
 	"strings"
-
-	log "github.com/cihub/seelog"
 )
 
 // GlobSet represents an ordered set of Globs, and has the same matching capabilities as a Glob. Globbing is done
-// in-order, with later globs taking precedence over earlier globs in the set. A GlobSet is immutable.
+// in order, with later globs taking precedence over earlier globs in the set. A GlobSet is immutable.
 type GlobSet interface {
 	GlobMatcher
+	// Globs returns the ordered Glob objects contained within the set
+	Globs() []Glob
 	// String returns the patterns used to create the GlobSet
 	String() string
 	// MatchingGlob returns the Glob that matches the specified pattern (or does not match, in the case of a negative
@@ -28,12 +28,20 @@ func (g globSetImpl) String() string {
 	return strings.Join(strs, ", ")
 }
 
+func (g globSetImpl) Globs() []Glob {
+	globs := make([]Glob, 0, len(g))
+	globs = append(globs, g...)
+	return globs
+}
+
 func (g globSetImpl) MatchingGlob(b []byte) Glob {
+	// By iterating in reverse order, we can bail early if we get a match further down. If we iterated in normal order,
+	// we would HAVE to check every glob
 	for i := len(g) - 1; i >= 0; i-- {
 		glob := g[i]
 		matches := glob.Match(b)
 		if matches {
-			log.Tracef("[GlobSet] %s matched to %s", string(b), glob.String())
+			Logger.Tracef("[ohmyglob:GlobSet] %s matched to %s", string(b), glob.String())
 			return glob
 		}
 	}

@@ -2,11 +2,52 @@ package ohmyglob
 
 import (
 	"regexp"
+	"unicode/utf8"
 )
 
-var escapedComponentRegex = regexp.MustCompile(`[-\/\\^$*+?.()|[\]{}]`)
+var escapeNeededCharRegex = regexp.MustCompile(`[-\/\\^$*+?.()|[\]{}]`)
 
 // Escapes any characters that would have special meaning in a regular expression, returning the escaped string
 func escapeRegexComponent(str string) string {
-	return escapedComponentRegex.ReplaceAllString(str, "\\$0")
+	return escapeNeededCharRegex.ReplaceAllString(str, "\\$0")
+}
+
+// separatorsScanner returns a split function for a scanner that returns tokens delimited any of the specified runes.
+// Note that the delimiters themselves are counted as tokens, so callers who want to discard the separators must do this
+// themselves.
+func separatorsScanner(separators []rune) func(data []byte, atEOF bool) (int, []byte, error) {
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+
+		// Transform the separators into a map (for efficient lookup)
+		seps := make(map[rune]bool)
+		for _, r := range separators {
+			seps[r] = true
+		}
+
+		// Scan until separator, marking the end of a token
+		for width, i := 0, 0; i < len(data); i += width {
+			var r rune
+			r, width = utf8.DecodeRune(data[i:])
+			if seps[r] {
+				if i == 0 {
+					// Separator token
+					return i + width, data[0 : i+width], nil
+				} else {
+					// Normal token
+					return i, data[0:i], nil
+				}
+			}
+		}
+
+		// If we're at EOF, we have a final, non-empty, non-terminated token: return it
+		if atEOF && len(data) > 0 {
+			return len(data), data[0:], nil
+		}
+
+		// Request more data
+		return 0, nil, nil
+	}
 }

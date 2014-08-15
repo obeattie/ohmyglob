@@ -1,15 +1,35 @@
 package ohmyglob
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 
 	log "github.com/cihub/seelog"
 )
 
-const globStarComponent = ".*"
+const globStarComponent = ".+"
+
+var (
+	expanders = []rune{'?', '*'}
+	// Logger is used to log trace-level info; logging is completely disabled by default but can be changed by replacing
+	// this with a configured logger
+	Logger log.LoggerInterface
+)
+
+func init() {
+	if Logger == nil {
+		var err error
+		Logger, err = log.LoggerFromWriterWithMinLevel(os.Stderr, log.CriticalLvl) // seelog bug means we can't use log.Off
+		if err != nil {
+			panic(err)
+		}
+	}
+}
 
 type parserState struct {
 	// Filled during parsing, before the regular expression is compiled
@@ -78,6 +98,13 @@ func CompileGlob(pattern string, options *GlobOptions) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {
 		options = DefaultGlobOptions
+	} else {
+		// Check that the separator is not an expander
+		for _, expander := range expanders {
+			if options.Separator == expander {
+				return nil, fmt.Errorf("'%s' is not allowed as a separator", options.Separator)
+			}
+		}
 	}
 
 	glob := &globImpl{
@@ -105,9 +132,17 @@ func CompileGlob(pattern string, options *GlobOptions) (Glob, error) {
 	}
 
 	// 2. Split into a series of path portion matches
-	components := strings.Split(pattern, string(options.Separator))
-	for idx, component := range components {
-		err = parseComponent(component, idx, glob)
+	scanner := bufio.NewScanner(strings.NewReader(pattern))
+	scanner.Split(separatorsScanner([]rune{options.Separator}))
+	for i := 0; scanner.Scan(); i++ {
+		component := scanner.Text()
+
+		// If the component is just a separator, discard it
+		if component == string(options.Separator) {
+			continue
+		}
+
+		err = parseComponent(scanner.Text(), i, glob)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +153,7 @@ func CompileGlob(pattern string, options *GlobOptions) (Glob, error) {
 	}
 
 	regexString := glob.parserState.regexBuffer.String()
-	log.Debugf("[Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
+	Logger.Debugf("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
 	re, err := regexp.Compile(regexString)
 	if err != nil {
 		return nil, err
@@ -148,26 +183,52 @@ func parseNegation(pattern string, glob *globImpl) (string, error) {
 
 func parseComponent(component string, idx int, glob *globImpl) error {
 	isGlobStar := false
-	buf := glob.parserState.regexBuffer
+	reBuf := glob.parserState.regexBuffer
 
 	if component == "**" {
 		isGlobStar = true
 		// Only add another globstar if the last component wasn't a globstar
 		if !glob.parserState.lastComponentWasGlobStar {
-			buf.WriteString(globStarComponent)
+			// Enclose in a optional non-captured group so we can enforce the need for a separator, even if there is no
+			// intervening path component
+			reBuf.WriteString("(?:")
+			if idx != 0 {
+				reBuf.WriteString(glob.parserState.escapedSeparator)
+			}
+			reBuf.WriteString(globStarComponent)
+			reBuf.WriteString(")?")
 		}
 	} else if component == "*" {
 		if idx != 0 {
-			buf.WriteString(glob.parserState.escapedSeparator)
+			reBuf.WriteString(glob.parserState.escapedSeparator)
 		}
-		buf.WriteString("[^")
-		buf.WriteString(glob.parserState.escapedSeparator)
-		buf.WriteString("]*")
+		reBuf.WriteString("[^")
+		reBuf.WriteString(glob.parserState.escapedSeparator)
+		reBuf.WriteString("]+")
 	} else {
 		if idx != 0 {
-			buf.WriteString(glob.parserState.escapedSeparator)
+			reBuf.WriteString(glob.parserState.escapedSeparator)
 		}
-		buf.WriteString(escapeRegexComponent(component))
+
+		// Scan through, expanding ? and *'s
+		scan := bufio.NewScanner(strings.NewReader(component))
+		scan.Split(separatorsScanner(expanders))
+
+		for scan.Scan() {
+			part := scan.Text()
+			switch part {
+			case "?":
+				reBuf.WriteString("[^")
+				reBuf.WriteString(glob.parserState.escapedSeparator)
+				reBuf.WriteString("]")
+			case "*":
+				reBuf.WriteString("[^")
+				reBuf.WriteString(glob.parserState.escapedSeparator)
+				reBuf.WriteString("]*")
+			default:
+				reBuf.WriteString(escapeRegexComponent(part))
+			}
+		}
 	}
 
 	glob.parserState.lastComponentWasGlobStar = isGlobStar
