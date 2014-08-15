@@ -4,7 +4,7 @@ A minimal glob matching utility for Go.
 
 ![ohmyglob!](http://i.imgur.com/7vjO2mF.gif)
 
-[![Build Status](https://travis-ci.org/obeattie/ohmyglob.svg?branch=master)](https://travis-ci.org/obeattie/ohmyglob)
+[![GoDoc](https://godoc.org/github.com/obeattie/ohmyglob?status.svg)](https://godoc.org/github.com/obeattie/ohmyglob) [![Build Status](https://travis-ci.org/obeattie/ohmyglob.svg?branch=master)](https://travis-ci.org/obeattie/ohmyglob)
 
 Works internally by converting glob expressions into [`Regexp`](http://golang.org/pkg/regexp/#Regexp)s, which are then
 used to match strings.
