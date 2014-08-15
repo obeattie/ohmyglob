@@ -35,10 +35,10 @@ func separatorsScanner(separators []rune) func(data []byte, atEOF bool) (int, []
 				if i == 0 {
 					// Separator token
 					return i + width, data[0 : i+width], nil
-				} else {
-					// Normal token
-					return i, data[0:i], nil
 				}
+
+				// Normal token
+				return i, data[0:i], nil
 			}
 		}
 

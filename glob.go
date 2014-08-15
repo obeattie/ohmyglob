@@ -53,7 +53,7 @@ type GlobMatcher interface {
 	MatchString(s string) bool
 }
 
-// A single glob pattern; implements GlobMatcher. A Glob is immutable.
+// Glob is a single glob pattern; implements GlobMatcher. A Glob is immutable.
 type Glob interface {
 	GlobMatcher
 	// String returns the pattern that was used to create the Glob
@@ -74,6 +74,7 @@ type globImpl struct {
 	negated bool
 }
 
+// Options modify the behaviour of Glob parsing
 type Options struct {
 	// The character used to split path components
 	Separator rune
@@ -83,7 +84,8 @@ type Options struct {
 	MatchAtEnd bool
 }
 
-var DefaultOptions *Options = &Options{
+// DefaultOptions are a default set of Options that uses a forward slash as a separator, and require a full match
+var DefaultOptions = &Options{
 	Separator:    '/',
 	MatchAtStart: true,
 	MatchAtEnd:   true,
@@ -107,7 +109,7 @@ func Compile(pattern string, options *Options) (Glob, error) {
 		// Check that the separator is not an expander
 		for _, expander := range expanders {
 			if options.Separator == expander {
-				return nil, fmt.Errorf("'%s' is not allowed as a separator", options.Separator)
+				return nil, fmt.Errorf("'%s' is not allowed as a separator", string(options.Separator))
 			}
 		}
 	}
