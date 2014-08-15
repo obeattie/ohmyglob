@@ -16,7 +16,7 @@ func TestGlobSet_MatchString(t *testing.T) {
 		"!foo/notme/baz",
 		"!foo/*/baz/foo/**",
 	}
-	set, err := CompileGlobSet(patterns, DefaultGlobOptions)
+	set, err := CompileGlobSet(patterns, DefaultOptions)
 	assert.NoError(t, err)
 
 	match := "foo/baz/baz"
@@ -38,7 +38,7 @@ func TestGlobSet_Match(t *testing.T) {
 		"!foo/notme/baz",
 		"!foo/*/baz/foo/**",
 	}
-	set, err := CompileGlobSet(patterns, DefaultGlobOptions)
+	set, err := CompileGlobSet(patterns, DefaultOptions)
 	assert.NoError(t, err)
 
 	match := []byte("foo/baz/baz")
@@ -60,7 +60,7 @@ func TestGlobSet_MatchReader(t *testing.T) {
 		"!foo/notme/baz",
 		"!foo/*/baz/foo/**",
 	}
-	set, err := CompileGlobSet(patterns, DefaultGlobOptions)
+	set, err := CompileGlobSet(patterns, DefaultOptions)
 	assert.NoError(t, err)
 
 	match := "foo/baz/baz"

@@ -84,10 +84,10 @@ func NewGlobSet(globs []Glob) (GlobSet, error) {
 }
 
 // CompileGlobSet constructs a GlobSet from a slice of strings, which will be compiled individually to Globs
-func CompileGlobSet(patterns []string, options *GlobOptions) (GlobSet, error) {
+func CompileGlobSet(patterns []string, options *Options) (GlobSet, error) {
 	globs := make(globSetImpl, len(patterns))
 	for i, pattern := range patterns {
-		glob, err := CompileGlob(pattern, options)
+		glob, err := Compile(pattern, options)
 		if err != nil {
 			return nil, err
 		}

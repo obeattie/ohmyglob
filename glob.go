@@ -36,7 +36,7 @@ type parserState struct {
 	regexBuffer *bytes.Buffer
 	// Set to true if the last parsed component was a globstar
 	lastComponentWasGlobStar bool
-	options                  *GlobOptions
+	options                  *Options
 	// The regex-escaped separator character
 	escapedSeparator string
 }
@@ -70,8 +70,7 @@ type globImpl struct {
 	negated bool
 }
 
-// GlobOptions
-type GlobOptions struct {
+type Options struct {
 	// The character used to split path components
 	Separator rune
 	// Set to false to allow any prefix before the glob match
@@ -80,7 +79,7 @@ type GlobOptions struct {
 	MatchAtEnd bool
 }
 
-var DefaultGlobOptions *GlobOptions = &GlobOptions{
+var DefaultOptions *Options = &Options{
 	Separator:    '/',
 	MatchAtStart: true,
 	MatchAtEnd:   true,
@@ -94,10 +93,10 @@ func (g *globImpl) IsNegative() bool {
 	return g.negated
 }
 
-func CompileGlob(pattern string, options *GlobOptions) (Glob, error) {
+func Compile(pattern string, options *Options) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
 	if options == nil {
-		options = DefaultGlobOptions
+		options = DefaultOptions
 	} else {
 		// Check that the separator is not an expander
 		for _, expander := range expanders {

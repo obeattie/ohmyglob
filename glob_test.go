@@ -14,7 +14,7 @@ func init() {
 
 func TestSimpleGlob(t *testing.T) {
 	pattern := "foo/*/b?r"
-	glob, err := CompileGlob(pattern, nil)
+	glob, err := Compile(pattern, nil)
 	assert.NoError(t, err)
 
 	match := "foo/baz/bar"
@@ -30,7 +30,7 @@ func TestSimpleGlob(t *testing.T) {
 
 	// With a * as a partial component
 	pattern = "foo/*/baz/--foo/--*/--baz"
-	glob, err = CompileGlob(pattern, nil)
+	glob, err = Compile(pattern, nil)
 	assert.NoError(t, err)
 	match = "foo/bar/baz/--foo/--bar/--baz"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
@@ -38,7 +38,7 @@ func TestSimpleGlob(t *testing.T) {
 
 func TestGlobStar(t *testing.T) {
 	pattern := "foo/**/bar/**"
-	glob, err := CompileGlob(pattern, nil)
+	glob, err := Compile(pattern, nil)
 	assert.NoError(t, err)
 
 	match := "foo/bar"
@@ -62,7 +62,7 @@ func TestGlobStar(t *testing.T) {
 
 	// Check consecutive globstars work correctly
 	pattern = "foo/**/**/bar"
-	glob, err = CompileGlob(pattern, nil)
+	glob, err = Compile(pattern, nil)
 	assert.NoError(t, err)
 	match = "foo/bar"
 	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
@@ -81,10 +81,10 @@ func TestGlobStar(t *testing.T) {
 // Check that setting MatchAtStart to false allows any prefix
 func TestNoMatchAtStart(t *testing.T) {
 	pattern := "foo"
-	glob, err := CompileGlob(pattern, &GlobOptions{
-		Separator:    DefaultGlobOptions.Separator,
+	glob, err := Compile(pattern, &Options{
+		Separator:    DefaultOptions.Separator,
 		MatchAtStart: false,
-		MatchAtEnd:   DefaultGlobOptions.MatchAtEnd,
+		MatchAtEnd:   DefaultOptions.MatchAtEnd,
 	})
 	assert.NoError(t, err)
 
@@ -104,9 +104,9 @@ func TestNoMatchAtStart(t *testing.T) {
 // Check that setting MatchAtStart to false allows any suffix
 func TestNoMatchAtEnd(t *testing.T) {
 	pattern := "foo"
-	glob, err := CompileGlob(pattern, &GlobOptions{
-		Separator:    DefaultGlobOptions.Separator,
-		MatchAtStart: DefaultGlobOptions.MatchAtStart,
+	glob, err := Compile(pattern, &Options{
+		Separator:    DefaultOptions.Separator,
+		MatchAtStart: DefaultOptions.MatchAtStart,
 		MatchAtEnd:   false,
 	})
 	assert.NoError(t, err)
@@ -126,7 +126,7 @@ func TestNoMatchAtEnd(t *testing.T) {
 
 func TestNegation(t *testing.T) {
 	pattern := "!foo"
-	glob, err := CompileGlob(pattern, nil)
+	glob, err := Compile(pattern, nil)
 	assert.NoError(t, err)
 	assert.True(t, glob.IsNegative(), "Glob should be negative")
 
@@ -143,10 +143,10 @@ func TestNegation(t *testing.T) {
 
 func TestCustomSeparator(t *testing.T) {
 	pattern := "foo.*.bar"
-	glob, err := CompileGlob(pattern, &GlobOptions{
+	glob, err := Compile(pattern, &Options{
 		Separator:    '.',
-		MatchAtStart: DefaultGlobOptions.MatchAtStart,
-		MatchAtEnd:   DefaultGlobOptions.MatchAtEnd,
+		MatchAtStart: DefaultOptions.MatchAtStart,
+		MatchAtEnd:   DefaultOptions.MatchAtEnd,
 	})
 	assert.NoError(t, err)
 
@@ -160,7 +160,7 @@ func TestCustomSeparator(t *testing.T) {
 
 // Illegal separators should return an error on construction
 func TestIllegalSeparator(t *testing.T) {
-	_, err := CompileGlob("foo", &GlobOptions{
+	_, err := Compile("foo", &Options{
 		Separator: '?',
 	})
 	assert.Error(t, err, "? should not be allowed as a separator")
@@ -170,7 +170,7 @@ func TestIllegalSeparator(t *testing.T) {
 func BenchmarkGlobbing(b *testing.B) {
 	pattern := "foo/**/baz/--fo?/*/--baz"
 	b.ResetTimer()
-	g, err := CompileGlob(pattern, nil)
+	g, err := Compile(pattern, nil)
 	assert.NoError(b, err)
 	assert.True(b, g.MatchString("foo/bar/bar/baz/--foo/--bar/--baz"))
 }
