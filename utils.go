@@ -1,11 +1,19 @@
 package ohmyglob
 
 import (
+	"bufio"
+	"bytes"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 )
 
 var escapeNeededCharRegex = regexp.MustCompile(`[-\/\\^$*+?.()|[\]{}]`)
+var runesToEscape []rune
+
+func init() {
+	runesToEscape = make([]rune, len(expanders))
+}
 
 // Escapes any characters that would have special meaning in a regular expression, returning the escaped string
 func escapeRegexComponent(str string) string {
@@ -50,4 +58,35 @@ func separatorsScanner(separators []rune) func(data []byte, atEOF bool) (int, []
 		// Request more data
 		return 0, nil, nil
 	}
+}
+
+// EscapeGlobComponent will return an escaped version the passed string, ensuring a literal match when used as part of
+// a pattern.
+func EscapeGlobComponent(component string, options *Options) (escapedComponent string) {
+	if options == nil {
+		options = DefaultOptions
+	}
+
+	runesToEscape := make([]rune, 0, len(expanders)+2)
+	runesToEscape = append(runesToEscape, expanders...)
+	runesToEscape = append(runesToEscape, options.Separator)
+	runesToEscape = append(runesToEscape, Escaper)
+
+	runesToEscapeMap := make(map[string]bool, len(runesToEscape))
+	for _, r := range runesToEscape {
+		runesToEscapeMap[string(r)] = true
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(component))
+	scanner.Split(separatorsScanner(runesToEscape))
+	buf := new(bytes.Buffer)
+	for scanner.Scan() {
+		component := scanner.Text()
+		if runesToEscapeMap[component] {
+			buf.WriteRune(Escaper)
+		}
+		buf.WriteString(component)
+	}
+
+	return buf.String()
 }
