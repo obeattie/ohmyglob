@@ -18,11 +18,21 @@ const globStarComponent = ".+"
 var (
 	// Logger is used to log trace-level info; logging is completely disabled by default but can be changed by replacing
 	// this with a configured logger
-	Logger    log.LoggerInterface
-	expanders = []rune{'?', '*'}
+	Logger log.LoggerInterface
+	// Runes that, in addition to the separator, mean something when they appear in the glob (includes Escaper)
+	expanders = []rune{'?', '*', Escaper}
+	// Map built from expanders
+	expandersMap map[rune]bool
+	// Character used to escape a meaningful character
+	Escaper = '\\'
 )
 
 func init() {
+	expandersMap = make(map[rune]bool, len(expanders))
+	for _, r := range expanders {
+		expandersMap[r] = true
+	}
+
 	if Logger == nil {
 		var err error
 		Logger, err = log.LoggerFromWriterWithMinLevel(os.Stderr, log.CriticalLvl) // seelog bug means we can't use log.Off
@@ -40,10 +50,13 @@ type parserState struct {
 	options                  *Options
 	// The regex-escaped separator character
 	escapedSeparator string
+	// If the next component encountered is escaped
+	nextIsEscaped bool
+	// Index of the current component
+	componentIndex int
 }
 
-// GlobMatcher is the basic interface provided by a Glob or GlobSet, which provides a Regexp-style interface for
-// checking matches.
+// GlobMatcher is the basic interface of a Glob or GlobSet. It provides a Regexp-style interface for checking matches.
 type GlobMatcher interface {
 	// Match reports whether the Glob matches the byte slice b
 	Match(b []byte) bool
@@ -140,19 +153,33 @@ func Compile(pattern string, options *Options) (Glob, error) {
 
 	// 2. Split into a series of path portion matches
 	scanner := bufio.NewScanner(strings.NewReader(pattern))
+	separatorString := string(options.Separator)
 	scanner.Split(separatorsScanner([]rune{options.Separator}))
+
 	for i := 0; scanner.Scan(); i++ {
 		component := scanner.Text()
 
-		// If the component is just a separator, discard it
-		if component == string(options.Separator) {
+		if component == separatorString {
 			continue
 		}
 
-		err = parseComponent(scanner.Text(), i, glob)
+		componentBuffer := new(bytes.Buffer)
+		lastWasGlobStar := glob.parserState.lastComponentWasGlobStar
+		err = parseComponent(component, glob, componentBuffer)
 		if err != nil {
 			return nil, err
 		}
+		// Do not write successive globstars; only the first in a run should be written
+		newIsGlobStar := glob.parserState.lastComponentWasGlobStar
+		if lastWasGlobStar && newIsGlobStar {
+			continue
+		}
+
+		if i > 0 && !newIsGlobStar && !(lastWasGlobStar && i == 1) {
+			glob.parserState.regexBuffer.WriteString(glob.parserState.escapedSeparator)
+		}
+		componentBuffer.WriteTo(glob.parserState.regexBuffer)
+		glob.parserState.componentIndex++
 	}
 
 	if options.MatchAtEnd {
@@ -188,42 +215,55 @@ func parseNegation(pattern string, glob *globImpl) (string, error) {
 	return pattern[negations:], nil
 }
 
-func parseComponent(component string, idx int, glob *globImpl) error {
+func parseComponent(component string, glob *globImpl, reBuf *bytes.Buffer) error {
 	isGlobStar := false
-	reBuf := glob.parserState.regexBuffer
+	isEscaped := glob.parserState.nextIsEscaped
+	nextIsEscaped := false
 
 	if component == "**" {
-		isGlobStar = true
-		// Only add another globstar if the last component wasn't a globstar
-		if !glob.parserState.lastComponentWasGlobStar {
+		if isEscaped {
+			reBuf.WriteString(`\*[^`)
+			reBuf.WriteString(glob.parserState.escapedSeparator)
+			reBuf.WriteString(`]+`)
+		} else {
+			isGlobStar = true
 			// Enclose in a optional non-captured group so we can enforce the need for a separator, even if there is no
 			// intervening path component
 			reBuf.WriteString("(?:")
-			if idx != 0 {
+			if glob.parserState.componentIndex != 0 {
 				reBuf.WriteString(glob.parserState.escapedSeparator)
 			}
 			reBuf.WriteString(globStarComponent)
 			reBuf.WriteString(")?")
 		}
 	} else if component == "*" {
-		if idx != 0 {
+		if isEscaped {
+			reBuf.WriteString(`\*`)
+		} else {
+			reBuf.WriteString("[^")
 			reBuf.WriteString(glob.parserState.escapedSeparator)
+			reBuf.WriteString("]+")
 		}
-		reBuf.WriteString("[^")
-		reBuf.WriteString(glob.parserState.escapedSeparator)
-		reBuf.WriteString("]+")
 	} else {
-		if idx != 0 {
-			reBuf.WriteString(glob.parserState.escapedSeparator)
-		}
-
 		// Scan through, expanding ? and *'s
 		scan := bufio.NewScanner(strings.NewReader(component))
 		scan.Split(separatorsScanner(expanders))
+		escapeNext := isEscaped
+		escaperString := string(Escaper)
 
 		for scan.Scan() {
 			part := scan.Text()
+			partEscaped := escapeNext
+			escapeNext = false
+
+			if partEscaped {
+				reBuf.WriteString(escapeRegexComponent(part))
+				continue
+			}
+
 			switch part {
+			case escaperString:
+				escapeNext = true
 			case "?":
 				reBuf.WriteString("[^")
 				reBuf.WriteString(glob.parserState.escapedSeparator)
@@ -236,8 +276,11 @@ func parseComponent(component string, idx int, glob *globImpl) error {
 				reBuf.WriteString(escapeRegexComponent(part))
 			}
 		}
+
+		nextIsEscaped = escapeNext
 	}
 
 	glob.parserState.lastComponentWasGlobStar = isGlobStar
+	glob.parserState.nextIsEscaped = nextIsEscaped
 	return nil
 }
