@@ -76,6 +76,28 @@ func TestGlobStar(t *testing.T) {
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 	match = "foobar"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
+
+	// Globstar at the head
+	pattern = "**/**/foobar"
+	glob, err = Compile(pattern, nil)
+	assert.NoError(t, err)
+	match = "foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo/foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo/bar/foo/bar/foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+
+	// Globstar at the tail
+	pattern = "foobar/**/**"
+	glob, err = Compile(pattern, nil)
+	assert.NoError(t, err)
+	match = "foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foobar/baz/boo"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foobar/baz"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 }
 
 // Check that setting MatchAtStart to false allows any prefix
