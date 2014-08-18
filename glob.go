@@ -2,7 +2,6 @@
 package ohmyglob
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -12,8 +11,6 @@ import (
 
 	log "github.com/cihub/seelog"
 )
-
-const globStarComponent = ".+"
 
 var (
 	// Logger is used to log trace-level info; logging is completely disabled by default but can be changed by replacing
@@ -43,17 +40,13 @@ func init() {
 }
 
 type parserState struct {
+	options *Options
 	// Filled during parsing, before the regular expression is compiled
 	regexBuffer *bytes.Buffer
-	// Set to true if the last parsed component was a globstar
-	lastComponentWasGlobStar bool
-	options                  *Options
 	// The regex-escaped separator character
 	escapedSeparator string
-	// If the next component encountered is escaped
-	nextIsEscaped bool
-	// Index of the current component
-	componentIndex int
+	// Index of the current token
+	tokenIndex int
 }
 
 // GlobMatcher is the basic interface of a Glob or GlobSet. It provides a Regexp-style interface for checking matches.
@@ -132,10 +125,9 @@ func Compile(pattern string, options *Options) (Glob, error) {
 		globPattern: pattern,
 		negated:     false,
 		parserState: &parserState{
-			regexBuffer:              new(bytes.Buffer),
-			lastComponentWasGlobStar: false,
-			options:                  options,
-			escapedSeparator:         escapeRegexComponent(string(options.Separator)),
+			regexBuffer:      new(bytes.Buffer),
+			options:          options,
+			escapedSeparator: escapeRegexComponent(string(options.Separator)),
 		},
 	}
 
@@ -151,35 +143,25 @@ func Compile(pattern string, options *Options) (Glob, error) {
 		return nil, err
 	}
 
-	// 2. Split into a series of path portion matches
-	scanner := bufio.NewScanner(strings.NewReader(pattern))
-	separatorString := string(options.Separator)
-	scanner.Split(separatorsScanner([]rune{options.Separator}))
-
-	for i := 0; scanner.Scan(); i++ {
-		component := scanner.Text()
-
-		if component == separatorString {
-			continue
-		}
-
-		componentBuffer := new(bytes.Buffer)
-		lastWasGlobStar := glob.parserState.lastComponentWasGlobStar
-		err = parseComponent(component, glob, componentBuffer)
-		if err != nil {
+	// 2. Tokenise and convert!
+	tokeniser := newGlobTokeniser(strings.NewReader(pattern), options)
+	lastTokenType := tcUnknown
+	for i := 0; tokeniser.Scan(); i++ {
+		if err = tokeniser.Err(); err != nil {
 			return nil, err
 		}
-		// Do not write successive globstars; only the first in a run should be written
-		newIsGlobStar := glob.parserState.lastComponentWasGlobStar
-		if lastWasGlobStar && newIsGlobStar {
-			continue
-		}
 
-		if i > 0 && !newIsGlobStar && !(lastWasGlobStar && i == 1) {
-			glob.parserState.regexBuffer.WriteString(glob.parserState.escapedSeparator)
+		token, tokenType := tokeniser.Token()
+		tokenBuffer := new(bytes.Buffer)
+		glob.parserState.tokenIndex = i
+
+		if tokenType == tcGlobStar && lastTokenType == tcGlobStar {
+			continue
+		} else if err = processToken(token, tokenType, glob, tokenBuffer); err != nil {
+			return nil, err
+		} else {
+			tokenBuffer.WriteTo(glob.parserState.regexBuffer)
 		}
-		componentBuffer.WriteTo(glob.parserState.regexBuffer)
-		glob.parserState.componentIndex++
 	}
 
 	if options.MatchAtEnd {
@@ -187,7 +169,7 @@ func Compile(pattern string, options *Options) (Glob, error) {
 	}
 
 	regexString := glob.parserState.regexBuffer.String()
-	Logger.Debugf("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
+	Logger.Infof("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
 	re, err := regexp.Compile(regexString)
 	if err != nil {
 		return nil, err
@@ -215,72 +197,29 @@ func parseNegation(pattern string, glob *globImpl) (string, error) {
 	return pattern[negations:], nil
 }
 
-func parseComponent(component string, glob *globImpl, reBuf *bytes.Buffer) error {
-	isGlobStar := false
-	isEscaped := glob.parserState.nextIsEscaped
-	nextIsEscaped := false
+func processToken(token string, tokenType tc, glob *globImpl, buf *bytes.Buffer) error {
+	state := glob.parserState
 
-	if component == "**" {
-		if isEscaped {
-			reBuf.WriteString(`\*[^`)
-			reBuf.WriteString(glob.parserState.escapedSeparator)
-			reBuf.WriteString(`]+`)
-		} else {
-			isGlobStar = true
-			// Enclose in a optional non-captured group so we can enforce the need for a separator, even if there is no
-			// intervening path component
-			reBuf.WriteString("(?:")
-			if glob.parserState.componentIndex != 0 {
-				reBuf.WriteString(glob.parserState.escapedSeparator)
-			}
-			reBuf.WriteString(globStarComponent)
-			reBuf.WriteString(")?")
+	switch tokenType {
+	case tcGlobStar:
+		buf.WriteString("(?:")
+		if state.tokenIndex > 0 {
+			buf.WriteString(state.escapedSeparator)
 		}
-	} else if component == "*" {
-		if isEscaped {
-			reBuf.WriteString(`\*`)
-		} else {
-			reBuf.WriteString("[^")
-			reBuf.WriteString(glob.parserState.escapedSeparator)
-			reBuf.WriteString("]+")
-		}
-	} else {
-		// Scan through, expanding ? and *'s
-		scan := bufio.NewScanner(strings.NewReader(component))
-		scan.Split(separatorsScanner(expanders))
-		escapeNext := isEscaped
-		escaperString := string(Escaper)
-
-		for scan.Scan() {
-			part := scan.Text()
-			partEscaped := escapeNext
-			escapeNext = false
-
-			if partEscaped {
-				reBuf.WriteString(escapeRegexComponent(part))
-				continue
-			}
-
-			switch part {
-			case escaperString:
-				escapeNext = true
-			case "?":
-				reBuf.WriteString("[^")
-				reBuf.WriteString(glob.parserState.escapedSeparator)
-				reBuf.WriteString("]")
-			case "*":
-				reBuf.WriteString("[^")
-				reBuf.WriteString(glob.parserState.escapedSeparator)
-				reBuf.WriteString("]*")
-			default:
-				reBuf.WriteString(escapeRegexComponent(part))
-			}
-		}
-
-		nextIsEscaped = escapeNext
+		buf.WriteString(".+)?")
+	case tcStar:
+		buf.WriteString("[^")
+		buf.WriteString(state.escapedSeparator)
+		buf.WriteString("]*")
+	case tcAny:
+		buf.WriteString("[^")
+		buf.WriteString(state.escapedSeparator)
+		buf.WriteString("]")
+	case tcSeparator:
+		buf.WriteString(state.escapedSeparator)
+	case tcLiteral:
+		buf.WriteString(escapeRegexComponent(token))
 	}
 
-	glob.parserState.lastComponentWasGlobStar = isGlobStar
-	glob.parserState.nextIsEscaped = nextIsEscaped
 	return nil
 }

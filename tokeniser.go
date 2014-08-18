@@ -9,19 +9,19 @@ type tc uint8
 
 const (
 	// An unknown component; returned if there is an error scanning or there are no more tokens
-	tcUnknown = tc(255)
-	// An Escaper
-	tcEscaper = tc(0)
-	// A globstar component (tc = type component)
-	tcGlobStar = tc(1)
-	// Any characters, aside from the separator
-	tcStar = tc(2)
-	// Any single character, aside from the separator
-	tcAny = tc(3)
-	// A separator
-	tcSeparator = tc(4)
+	tcUnknown = tc(0)
 	// A string literal
-	tcLiteral = tc(5)
+	tcLiteral = tc(1)
+	// An Escaper
+	tcEscaper = tc(2)
+	// Any characters, aside from the separator
+	tcStar = tc(3)
+	// A globstar component (tc = type component)
+	tcGlobStar = tc(4)
+	// Any single character, aside from the separator
+	tcAny = tc(5)
+	// A separator
+	tcSeparator = tc(6)
 )
 
 // Tokenises a glob input; implements an API very similar to that of bufio.Scanner (though is not identical)
@@ -48,6 +48,7 @@ func (g *globTokeniser) parse() error {
 	tokenBuf := new(bytes.Buffer)
 	tokenType := tcUnknown
 
+	escapeRune := (lastTokenType == tcSeparator)
 	runesConsumed := 0
 	for ; ; runesConsumed++ {
 		var r rune
@@ -57,9 +58,10 @@ func (g *globTokeniser) parse() error {
 		}
 
 		runeType := tcUnknown
-		if lastTokenType == tcEscaper {
+		if escapeRune {
 			// If the last token was an escaper, this MUST be a literal
 			runeType = tcLiteral
+			escapeRune = false
 		} else {
 			switch r {
 			case Escaper:
@@ -79,7 +81,9 @@ func (g *globTokeniser) parse() error {
 			}
 		}
 
-		if tokenType != tcUnknown && tokenType != runeType {
+		if tokenType != tcUnknown && tokenType != runeType &&
+			// Globstars are special in that they can (and do) modify the overall component type
+			!(tokenType == tcStar && runeType == tcGlobStar) {
 			// We've stumbled upon the next token; backtrack
 			g.input.UnreadRune()
 			break
@@ -90,7 +94,6 @@ func (g *globTokeniser) parse() error {
 
 		if tokenType == tcEscaper ||
 			tokenType == tcGlobStar ||
-			tokenType == tcStar ||
 			tokenType == tcAny ||
 			tokenType == tcSeparator {
 			// Deal with the standalone tokens; these cannot continue consuming
@@ -117,7 +120,7 @@ func (g *globTokeniser) parse() error {
 		}
 	}
 
-	Logger.Tracef("[Tokeniser] parse(): err %v, token %v, tokenType %v", err, g.token, g.tokenType)
+	Logger.Tracef("[Tokeniser] parse() result: err %v, token %v, tokenType %v", err, g.token, g.tokenType)
 
 	return err
 }
