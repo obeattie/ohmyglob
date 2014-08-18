@@ -119,7 +119,6 @@ consumer:
 		// Escapers should never be yielded; recurse to find the next token
 		Logger.Tracef("[Tokeniser] parse() got tcEscaper; recursing")
 		err = g.parse()
-		Logger.Tracef("[Tokeniser] parse() recursed")
 	} else {
 		Logger.Tracef("[Tokeniser] parse() result: err %v, token %v, tokenType %v", err, g.token, g.tokenType)
 	}

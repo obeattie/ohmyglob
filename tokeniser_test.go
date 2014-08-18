@@ -109,3 +109,63 @@ func TestTokeniser_Escaper(t *testing.T) {
 	}
 	testTokenRun(t, tokeniser, e)
 }
+
+// Test various cominations; we don't just have one giant function because we want to know which individual components
+// are broken, if they are
+func TestTokeniser_Combinations(t *testing.T) {
+	es := map[string]expectations{
+		`foobar/*`: expectations{
+			eToken{`foobar`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`*`, tcStar},
+		},
+		`foobar/*/baz`: expectations{
+			eToken{`foobar`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`*`, tcStar},
+			eToken{`/`, tcSeparator},
+			eToken{`baz`, tcLiteral},
+		},
+		`foobar/**/baz\/boo?foo!`: expectations{
+			eToken{`foobar`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`**`, tcGlobStar},
+			eToken{`/`, tcSeparator},
+			eToken{`baz`, tcLiteral},
+			eToken{`/boo`, tcLiteral},
+			eToken{`?`, tcAny},
+			eToken{`foo!`, tcLiteral},
+		},
+		`**/foo//bar/ba?**dee\//这是可\怕的/////\///`: expectations{
+			eToken{`**`, tcGlobStar},
+			eToken{`/`, tcSeparator},
+			eToken{`foo`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+			eToken{`bar`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`ba`, tcLiteral},
+			eToken{`?`, tcAny},
+			eToken{`**`, tcGlobStar},
+			eToken{`dee`, tcLiteral},
+			eToken{`/`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`这是可`, tcLiteral},
+			eToken{`怕的`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcLiteral},
+			eToken{`/`, tcSeparator},
+			eToken{`/`, tcSeparator},
+		},
+	}
+
+	for input, e := range es {
+		Logger.Tracef("Testing \"%s\"", input)
+		tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
+		testTokenRun(t, tokeniser, e)
+	}
+}
