@@ -24,12 +24,12 @@ func testTokenRun(t *testing.T, tokeniser *globTokeniser, e expectations) {
 		assert.Equal(t, expectedToken, token, "Token %d value does not match expectation", i)
 	}
 
-	assert.False(t, tokeniser.Scan(), "Should only return one token")
+	assert.False(t, tokeniser.Scan(), "Should only return %d tokens", len(e))
 	assert.NoError(t, tokeniser.Err()) // EOF's aren't reported
 }
 
 func TestTokeniser_Simple(t *testing.T) {
-	input := "abcdef abcdef abcdef"
+	input := `abcdef abcdef abcdef`
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -39,7 +39,8 @@ func TestTokeniser_Simple(t *testing.T) {
 }
 
 func TestTokeniser_Wildcard(t *testing.T) {
-	input := "part1*part2"
+	input := `part1*part2`
+	Logger.Tracef("Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -51,7 +52,8 @@ func TestTokeniser_Wildcard(t *testing.T) {
 }
 
 func TestTokeniser_Globstar(t *testing.T) {
-	input := "part1**part2****"
+	input := `part1**part2****`
+	Logger.Tracef("Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -65,7 +67,8 @@ func TestTokeniser_Globstar(t *testing.T) {
 }
 
 func TestTokeniser_AnyCharacter(t *testing.T) {
-	input := "part1?part2"
+	input := `part1?part2`
+	Logger.Tracef("Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -77,7 +80,8 @@ func TestTokeniser_AnyCharacter(t *testing.T) {
 }
 
 func TestTokeniser_Separator(t *testing.T) {
-	input := "part1/part2"
+	input := `part1/part2`
+	Logger.Tracef("Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -89,7 +93,8 @@ func TestTokeniser_Separator(t *testing.T) {
 }
 
 func TestTokeniser_Escaper(t *testing.T) {
-	input := `part1\*part2\`
+	input := `part1\*part2\\\\\foobar`
+	Logger.Tracef("Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -97,6 +102,10 @@ func TestTokeniser_Escaper(t *testing.T) {
 		// able to handle consecutive literals anyway, this is not a problem
 		eToken{`part1`, tcLiteral},
 		eToken{`*part2`, tcLiteral},
+		eToken{`\`, tcLiteral},
+		eToken{`\`, tcLiteral},
+		// The "f" here was escaped, and it should have no effect
+		eToken{`foobar`, tcLiteral},
 	}
 	testTokenRun(t, tokeniser, e)
 }

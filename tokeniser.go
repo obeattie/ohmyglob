@@ -30,7 +30,7 @@ type globTokeniser struct {
 	globOptions *Options
 	token       string
 	tokenType   tc
-	lastErr     error
+	err         error
 }
 
 func newGlobTokeniser(input io.RuneScanner, globOptions *Options) *globTokeniser {
@@ -47,10 +47,10 @@ func (g *globTokeniser) parse() error {
 
 	tokenBuf := new(bytes.Buffer)
 	tokenType := tcUnknown
+	escaped := lastTokenType == tcEscaper
 
-	escapeRune := (lastTokenType == tcSeparator)
-	runesConsumed := 0
-	for ; ; runesConsumed++ {
+consumer:
+	for {
 		var r rune
 		r, _, err = g.input.ReadRune()
 		if err != nil {
@@ -58,35 +58,34 @@ func (g *globTokeniser) parse() error {
 		}
 
 		runeType := tcUnknown
-		if escapeRune {
-			// If the last token was an escaper, this MUST be a literal
-			runeType = tcLiteral
-			escapeRune = false
-		} else {
-			switch r {
-			case Escaper:
-				runeType = tcEscaper
-			case '*':
-				if tokenType == tcStar {
-					runeType = tcGlobStar
-				} else {
-					runeType = tcStar
-				}
-			case '?':
-				runeType = tcAny
-			case g.globOptions.Separator:
-				runeType = tcSeparator
-			default:
-				runeType = tcLiteral
+		switch r {
+		case Escaper:
+			runeType = tcEscaper
+		case '*':
+			if tokenType == tcStar {
+				runeType = tcGlobStar
+				tokenType = tcGlobStar
+			} else {
+				runeType = tcStar
 			}
+		case '?':
+			runeType = tcAny
+		case g.globOptions.Separator:
+			runeType = tcSeparator
+		default:
+			runeType = tcLiteral
 		}
 
-		if tokenType != tcUnknown && tokenType != runeType &&
-			// Globstars are special in that they can (and do) modify the overall component type
-			!(tokenType == tcStar && runeType == tcGlobStar) {
-			// We've stumbled upon the next token; backtrack
+		if escaped {
+			// If the last token was an Escaper, this MUST be a literal
+			runeType = tcLiteral
+			escaped = false
+		}
+
+		if (tokenType != tcUnknown) && (tokenType != runeType) {
+			// We've stumbled into the next token; backtrack
 			g.input.UnreadRune()
-			break
+			break consumer
 		}
 
 		tokenType = runeType
@@ -96,31 +95,34 @@ func (g *globTokeniser) parse() error {
 			tokenType == tcGlobStar ||
 			tokenType == tcAny ||
 			tokenType == tcSeparator {
-			// Deal with the standalone tokens; these cannot continue consuming
+			// These tokens are standalone; continued consumption must be a separate token
 			break
 		}
 	}
 
-	if err == io.EOF && runesConsumed > 0 {
-		// Don't report this at all if we have a token
+	if err == io.EOF && tokenType != tcUnknown {
+		// If we have a token, we can't have an EOF: we want the EOF on the next pass
 		err = nil
 	}
 
-	if err != nil && err != io.EOF {
+	if err != nil {
 		// Ensure this is set back, in case an error occured after these were set in "the loop" (EOF errors don't count)
 		g.token = ""
 		g.tokenType = tcUnknown
-	} else {
-		g.token = tokenBuf.String()
-		g.tokenType = tokenType
-
-		if tokenType == tcEscaper {
-			// Escapers should never be yielded; recurse to find the next token
-			return g.parse()
-		}
+		return err
 	}
 
-	Logger.Tracef("[Tokeniser] parse() result: err %v, token %v, tokenType %v", err, g.token, g.tokenType)
+	g.token = tokenBuf.String()
+	g.tokenType = tokenType
+
+	if tokenType == tcEscaper {
+		// Escapers should never be yielded; recurse to find the next token
+		Logger.Tracef("[Tokeniser] parse() got tcEscaper; recursing")
+		err = g.parse()
+		Logger.Tracef("[Tokeniser] parse() recursed")
+	} else {
+		Logger.Tracef("[Tokeniser] parse() result: err %v, token %v, tokenType %v", err, g.token, g.tokenType)
+	}
 
 	return err
 }
@@ -131,17 +133,17 @@ func (g *globTokeniser) parse() error {
 func (g *globTokeniser) Scan() bool {
 	err := g.parse()
 	if err == io.EOF {
-		// EOF errors aren't stored as lastErr
-		g.lastErr = nil
+		// EOF errors aren't stored
+		g.err = nil
 	} else {
-		g.lastErr = err
+		g.err = err
 	}
 	return err == nil
 }
 
 // Err returns the first non-EOF error that was encountered by the tokeniser
 func (g *globTokeniser) Err() error {
-	return g.lastErr
+	return g.err
 }
 
 func (g *globTokeniser) Token() (token string, tokenType tc) {
