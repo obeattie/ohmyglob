@@ -200,8 +200,6 @@ func Compile(pattern string, options *Options) (Glob, error) {
 		state.processedTokens = append(state.processedTokens, t)
 	}
 
-	fmt.Print(lastProcessedToken)
-
 	for _, t := range state.processedTokens {
 		t.contents.WriteTo(regexBuf)
 	}
