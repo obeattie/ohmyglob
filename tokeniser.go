@@ -119,9 +119,10 @@ func (g *globTokeniser) parse(lastTokenType tc) (string, tc, error) {
 	return tokenBuf.String(), tokenType, err
 }
 
-// Scan advances the Scanner to the next token, which will then be available through the Token method. It returns false
-// when the scan stops, either by reaching the end of the input or an error. After Scan returns false, the Err method
-// will return any error that occurred during scanning, except that if it was io.EOF, Err will return nil.
+// Scan advances the tokeniser to the next token, which will then be available through the Token method. It returns
+// false when the tokenisation stops, either by reaching the end of the input or an error. After Scan returns false,
+// the Err method will return any error that occurred during scanning, except that if it was io.EOF, Err will return
+// nil.
 func (g *globTokeniser) Scan() bool {
 	if g.hasPeek {
 		g.token, g.tokenType, g.err = g.peekToken, g.peekTokenType, g.peekErr

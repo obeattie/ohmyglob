@@ -20,7 +20,7 @@ var (
 	expanders = []rune{'?', '*', Escaper}
 	// Map built from expanders
 	expandersMap map[rune]bool
-	// Character used to escape a meaningful character
+	// Escaper is the character used to escape a meaningful character
 	Escaper = '\\'
 )
 
