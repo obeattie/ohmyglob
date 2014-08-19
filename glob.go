@@ -171,7 +171,8 @@ func Compile(pattern string, options *Options) (Glob, error) {
 
 		// Special cases
 		if tokenType == tcGlobStar && tokeniser.Peek() {
-			// If the next token is a separator, consume it
+			// If this is a globstar and the next token is a separator, consume it (the globstar pattern itself includes
+			// a separator)
 			if err = tokeniser.PeekErr(); err != nil {
 				return nil, err
 			}
@@ -181,7 +182,8 @@ func Compile(pattern string, options *Options) (Glob, error) {
 			}
 		}
 		if tokenType == tcGlobStar && lastProcessedToken.tokenType == tcGlobStar {
-			// If the last token was a globstar and this is too, remove the last
+			// If the last token was a globstar and this is too, remove the last. We don't remove this globstar because
+			// it may now be the last in the pattern, which is special
 			lastProcessedToken = popLastToken(state)
 		}
 		if tokenType == tcGlobStar && lastProcessedToken.tokenType == tcSeparator && !tokeniser.Peek() {
