@@ -93,6 +93,23 @@ func TestTokeniser_Separator(t *testing.T) {
 	testTokenRun(t, tokeniser, e)
 }
 
+func TestTokeniser_CustomSeparator(t *testing.T) {
+	input := `part1فpart2`
+	Logger.Tracef("[ohmyglob: TestTokeniser_Separator] Testing \"%s\"", input)
+	tokeniser := newGlobTokeniser(strings.NewReader(input), &Options{
+		Separator:    'ف',
+		MatchAtStart: true,
+		MatchAtEnd:   true,
+	})
+
+	e := expectations{
+		eToken{"part1", tcLiteral},
+		eToken{"ف", tcSeparator},
+		eToken{"part2", tcLiteral},
+	}
+	testTokenRun(t, tokeniser, e)
+}
+
 func TestTokeniser_Escaper(t *testing.T) {
 	input := `part1\*part2\\\\\foobar`
 	Logger.Tracef("[ohmyglob:TestTokeniser_Escaper] Testing \"%s\"", input)
@@ -169,10 +186,6 @@ func TestTokeniser_Combinations(t *testing.T) {
 		tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 		testTokenRun(t, tokeniser, e)
 	}
-}
-
-func TestTokeniser_CustomSeparator(t *testing.T) {
-
 }
 
 func TestTokeniser_Peeking(t *testing.T) {

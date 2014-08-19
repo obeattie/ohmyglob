@@ -203,7 +203,7 @@ func TestEscaping(t *testing.T) {
 		`\/\/\/\*\*.*`:              [2]string{`///**.foobar`, `///foobar.baz`},
 		`\`:                         [2]string{``, `\`},
 		`foo\bar/baz`:               [2]string{`foobar/baz`, `foo\bar/baz`},
-		`foo\\bar\/\//barbaz\*\?\\`: [2]string{`foo\bar///barbaz*?\\`, `a`},
+		`foo\\bar\/\//barbaz\*\?\\`: [2]string{`foo\bar///barbaz*?\`, `a`},
 	}
 
 	for pattern, s := range expectations {
