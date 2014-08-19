@@ -76,6 +76,28 @@ func TestGlobStar(t *testing.T) {
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
 	match = "foobar"
 	assert.False(t, glob.MatchString(match), "%s should not match %s", pattern, match)
+
+	// Globstar at the head
+	pattern = "**/**/foobar"
+	glob, err = Compile(pattern, nil)
+	assert.NoError(t, err)
+	match = "foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo/foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foo/bar/foo/bar/foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+
+	// Globstar at the tail
+	pattern = "foobar/**/**"
+	glob, err = Compile(pattern, nil)
+	assert.NoError(t, err)
+	match = "foobar"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foobar/baz/boo"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
+	match = "foobar/baz"
+	assert.True(t, glob.MatchString(match), "%s should match %s", pattern, match)
 }
 
 // Check that setting MatchAtStart to false allows any prefix
@@ -164,6 +186,36 @@ func TestIllegalSeparator(t *testing.T) {
 		Separator: '?',
 	})
 	assert.Error(t, err, "? should not be allowed as a separator")
+
+	_, err = Compile("foo", &Options{
+		Separator: '\\',
+	})
+	assert.Error(t, err, "\\ should not be allowed as a separator")
+}
+
+// Meaningful can be escaped with a backslash
+func TestEscaping(t *testing.T) {
+	// Maps to a pair of (should, shouldn't) strings
+	expectations := map[string][2]string{
+		`\/`:                        [2]string{`/`, ``},
+		`foo\bar/\*\/baz`:           [2]string{`foobar/*/baz`, `foobar/foo/baz`},
+		`foo\?bar`:                  [2]string{`foo?bar`, `foosbar`},
+		`\/\/\/\*\*.*`:              [2]string{`///**.foobar`, `///foobar.baz`},
+		`\`:                         [2]string{``, `\`},
+		`foo\bar/baz`:               [2]string{`foobar/baz`, `foo\bar/baz`},
+		`foo\\bar\/\//barbaz\*\?\\`: [2]string{`foo\bar///barbaz*?\`, `a`},
+	}
+
+	for pattern, s := range expectations {
+		glob, err := Compile(pattern, DefaultOptions)
+		assert.NoError(t, err)
+
+		should, shouldnt := s[0], s[1]
+		assert.False(t, glob.MatchString(shouldnt), "Glob `%s` should not match `%s`", pattern, shouldnt)
+		assert.True(t, glob.MatchString(should), "Glob `%s` should match `%s`", pattern, should)
+	}
+
+	// Custom separator
 }
 
 // Benchmark globbing from start to finish; constructing and matching
