@@ -9,28 +9,32 @@ type tc uint8
 
 const (
 	// An unknown component; returned if there is an error scanning or there are no more tokens
-	tcUnknown = tc(0)
+	tcUnknown = tc(0x0)
 	// A string literal
-	tcLiteral = tc(1)
+	tcLiteral = tc(0x1)
 	// An Escaper
-	tcEscaper = tc(2)
+	tcEscaper = tc(0x2)
 	// Any characters, aside from the separator
-	tcStar = tc(3)
+	tcStar = tc(0x3)
 	// A globstar component (tc = type component)
-	tcGlobStar = tc(4)
+	tcGlobStar = tc(0x4)
 	// Any single character, aside from the separator
-	tcAny = tc(5)
+	tcAny = tc(0x5)
 	// A separator
-	tcSeparator = tc(6)
+	tcSeparator = tc(0x6)
 )
 
 // Tokenises a glob input; implements an API very similar to that of bufio.Scanner (though is not identical)
 type globTokeniser struct {
-	input       io.RuneScanner
-	globOptions *Options
-	token       string
-	tokenType   tc
-	err         error
+	input         io.RuneScanner
+	globOptions   *Options
+	token         string
+	tokenType     tc
+	err           error
+	hasPeek       bool
+	peekToken     string
+	peekTokenType tc
+	peekErr       error
 }
 
 func newGlobTokeniser(input io.RuneScanner, globOptions *Options) *globTokeniser {
@@ -41,9 +45,8 @@ func newGlobTokeniser(input io.RuneScanner, globOptions *Options) *globTokeniser
 }
 
 // Advances by a single token
-func (g *globTokeniser) parse() error {
+func (g *globTokeniser) parse(lastTokenType tc) (string, tc, error) {
 	var err error
-	lastTokenType := g.tokenType
 
 	tokenBuf := new(bytes.Buffer)
 	tokenType := tcUnknown
@@ -105,43 +108,68 @@ func (g *globTokeniser) parse() error {
 	}
 
 	if err != nil {
-		// Ensure this is set back, in case an error occured after these were set in "le grand loop" (EOF errors don't
-		// count)
-		g.token = ""
-		g.tokenType = tcUnknown
-		return err
+		return "", tcUnknown, err
 	}
-
-	g.token = tokenBuf.String()
-	g.tokenType = tokenType
 
 	if tokenType == tcEscaper {
 		// Escapers should never be yielded; recurse to find the next token
-		err = g.parse()
+		return g.parse(tokenType)
 	}
 
-	return err
+	return tokenBuf.String(), tokenType, err
 }
 
 // Scan advances the Scanner to the next token, which will then be available through the Token method. It returns false
 // when the scan stops, either by reaching the end of the input or an error. After Scan returns false, the Err method
 // will return any error that occurred during scanning, except that if it was io.EOF, Err will return nil.
 func (g *globTokeniser) Scan() bool {
-	err := g.parse()
-	if err == io.EOF {
-		// EOF errors aren't stored
-		g.err = nil
+	if g.hasPeek {
+		g.token, g.tokenType, g.err = g.peekToken, g.peekTokenType, g.peekErr
 	} else {
-		g.err = err
+		g.token, g.tokenType, g.err = g.parse(g.tokenType)
 	}
-	return err == nil
+
+	g.peekErr = nil
+	g.peekToken = ""
+	g.peekTokenType = tcUnknown
+	g.hasPeek = false
+	return g.err == nil
+}
+
+// Peek peeks to the next token, making it available as PeekToken(). Next time Scan() is called it will advance the
+// tokeniser to the peeked token. If there is already a peaked token, it will not advance.
+func (g *globTokeniser) Peek() bool {
+	if !g.hasPeek {
+		g.peekToken, g.peekTokenType, g.peekErr = g.parse(g.tokenType)
+		g.hasPeek = true
+	}
+
+	return g.peekErr == nil
 }
 
 // Err returns the first non-EOF error that was encountered by the tokeniser
 func (g *globTokeniser) Err() error {
+	if g.err == io.EOF {
+		return nil
+	}
+
 	return g.err
 }
 
 func (g *globTokeniser) Token() (token string, tokenType tc) {
 	return g.token, g.tokenType
+}
+
+// PeekToken returns the peeked token
+func (g *globTokeniser) PeekToken() (token string, tokenType tc) {
+	return g.peekToken, g.peekTokenType
+}
+
+// PeekErr returns the error that will be returned by Err() next time Scan() is called. Peek() must be called first.
+func (g *globTokeniser) PeekErr() error {
+	if g.peekErr == io.EOF {
+		return nil
+	}
+
+	return g.peekErr
 }

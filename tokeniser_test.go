@@ -30,6 +30,7 @@ func testTokenRun(t *testing.T, tokeniser *globTokeniser, e expectations) {
 
 func TestTokeniser_Simple(t *testing.T) {
 	input := `abcdef abcdef abcdef`
+	Logger.Tracef("[ohmyglob:TestTokeniser_Simple] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -40,7 +41,7 @@ func TestTokeniser_Simple(t *testing.T) {
 
 func TestTokeniser_Wildcard(t *testing.T) {
 	input := `part1*part2`
-	Logger.Tracef("Testing \"%s\"", input)
+	Logger.Tracef("[ohmyglob:TestTokeniser_Wildcard] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -53,7 +54,7 @@ func TestTokeniser_Wildcard(t *testing.T) {
 
 func TestTokeniser_Globstar(t *testing.T) {
 	input := `part1**part2****`
-	Logger.Tracef("Testing \"%s\"", input)
+	Logger.Tracef("[ohmyglob:TestTokeniser_Globstar] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -68,7 +69,7 @@ func TestTokeniser_Globstar(t *testing.T) {
 
 func TestTokeniser_AnyCharacter(t *testing.T) {
 	input := `part1?part2`
-	Logger.Tracef("Testing \"%s\"", input)
+	Logger.Tracef("[ohmyglob:TestTokeniser_AnyCharacter] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -81,7 +82,7 @@ func TestTokeniser_AnyCharacter(t *testing.T) {
 
 func TestTokeniser_Separator(t *testing.T) {
 	input := `part1/part2`
-	Logger.Tracef("Testing \"%s\"", input)
+	Logger.Tracef("[ohmyglob: TestTokeniser_Separator] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -94,7 +95,7 @@ func TestTokeniser_Separator(t *testing.T) {
 
 func TestTokeniser_Escaper(t *testing.T) {
 	input := `part1\*part2\\\\\foobar`
-	Logger.Tracef("Testing \"%s\"", input)
+	Logger.Tracef("[ohmyglob:TestTokeniser_Escaper] Testing \"%s\"", input)
 	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 
 	e := expectations{
@@ -164,8 +165,125 @@ func TestTokeniser_Combinations(t *testing.T) {
 	}
 
 	for input, e := range es {
-		Logger.Tracef("Testing \"%s\"", input)
+		Logger.Tracef("[ohmyglob:TestTokeniser_Combinations] Testing \"%s\"", input)
 		tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
 		testTokenRun(t, tokeniser, e)
 	}
+}
+
+func TestTokeniser_CustomSeparator(t *testing.T) {
+
+}
+
+func TestTokeniser_Peeking(t *testing.T) {
+	input := `foo/*/bar/**/baz?`
+	tokeniser := newGlobTokeniser(strings.NewReader(input), DefaultOptions)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType := tokeniser.Token()
+	assert.Equal(t, `foo`, token)
+	assert.Equal(t, tcLiteral, tokenType)
+
+	assert.True(t, tokeniser.Peek(), "Expected peek not possible")
+	assert.NoError(t, tokeniser.Err(), "Peek caused unexpected error")
+	assert.NoError(t, tokeniser.PeekErr(), "Unexpected peek error")
+	newToken, newTokenType := tokeniser.Token()
+	assert.Equal(t, token, newToken, "Peek altered token returned by Token()")
+	assert.Equal(t, tokenType, newTokenType, "Peek altered tokenType returned by Token()")
+	peekedToken, peekedTokenType := tokeniser.PeekToken()
+	assert.Equal(t, `/`, peekedToken)
+	assert.Equal(t, tcSeparator, peekedTokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, peekedToken, token, "Scan()'d token does not match prior Peek()")
+	assert.Equal(t, peekedTokenType, tokenType, "Scan()'d tokenType does not match prior Peek()")
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, `*`, token)
+	assert.Equal(t, tcStar, tokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, `/`, token)
+	assert.Equal(t, tcSeparator, tokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, `bar`, token)
+	assert.Equal(t, tcLiteral, tokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, `/`, token)
+	assert.Equal(t, tcSeparator, tokenType)
+
+	assert.True(t, tokeniser.Peek(), "Expected peek not possible")
+	assert.NoError(t, tokeniser.Err(), "Peek caused unexpected error")
+	assert.NoError(t, tokeniser.PeekErr(), "Unexpected peek error")
+	newToken, newTokenType = tokeniser.Token()
+	assert.Equal(t, token, newToken, "Peek altered token returned by Token()")
+	assert.Equal(t, tokenType, newTokenType, "Peek altered tokenType returned by Token()")
+	peekedToken, peekedTokenType = tokeniser.PeekToken()
+	assert.Equal(t, `**`, peekedToken)
+	assert.Equal(t, tcGlobStar, peekedTokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, peekedToken, token, "Scan()'d token does not match prior Peek()")
+	assert.Equal(t, peekedTokenType, tokenType, "Scan()'d tokenType does not match prior Peek()")
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, `/`, token)
+	assert.Equal(t, tcSeparator, tokenType)
+
+	assert.True(t, tokeniser.Peek(), "Expected peek not possible")
+	assert.NoError(t, tokeniser.Err(), "Peek caused unexpected error")
+	assert.NoError(t, tokeniser.PeekErr(), "Unexpected peek error")
+	newToken, newTokenType = tokeniser.Token()
+	assert.Equal(t, token, newToken, "Peek altered token returned by Token()")
+	assert.Equal(t, tokenType, newTokenType, "Peek altered tokenType returned by Token()")
+	peekedToken, peekedTokenType = tokeniser.PeekToken()
+	assert.Equal(t, `baz`, peekedToken)
+	assert.Equal(t, tcLiteral, peekedTokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, peekedToken, token, "Scan()'d token does not match prior Peek()")
+	assert.Equal(t, peekedTokenType, tokenType, "Scan()'d tokenType does not match prior Peek()")
+
+	assert.True(t, tokeniser.Peek(), "Expected peek not possible")
+	assert.NoError(t, tokeniser.Err(), "Peek caused unexpected error")
+	assert.NoError(t, tokeniser.PeekErr(), "Unexpected peek error")
+	newToken, newTokenType = tokeniser.Token()
+	assert.Equal(t, token, newToken, "Peek altered token returned by Token()")
+	assert.Equal(t, tokenType, newTokenType, "Peek altered tokenType returned by Token()")
+	peekedToken, peekedTokenType = tokeniser.PeekToken()
+	assert.Equal(t, `?`, peekedToken)
+	assert.Equal(t, tcAny, peekedTokenType)
+
+	assert.True(t, tokeniser.Scan())
+	assert.NoError(t, tokeniser.Err())
+	token, tokenType = tokeniser.Token()
+	assert.Equal(t, peekedToken, token, "Scan()'d token does not match prior Peek()")
+	assert.Equal(t, peekedTokenType, tokenType, "Scan()'d tokenType does not match prior Peek()")
+
+	assert.False(t, tokeniser.Peek(), "Peeked past end of input")
+	assert.NoError(t, tokeniser.PeekErr()) // EOF's aren't reported
+	assert.NoError(t, tokeniser.Err())     // EOF's aren't reported
+
+	assert.False(t, tokeniser.Scan(), "Scanned past end of input")
+	assert.NoError(t, tokeniser.Err())     // EOF's aren't reported
+	assert.NoError(t, tokeniser.PeekErr()) // EOF's aren't reported
 }
