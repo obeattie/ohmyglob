@@ -49,7 +49,6 @@ func (g *globTokeniser) parse() error {
 	tokenType := tcUnknown
 	escaped := lastTokenType == tcEscaper
 
-consumer:
 	for {
 		var r rune
 		r, _, err = g.input.ReadRune()
@@ -85,7 +84,7 @@ consumer:
 		if (tokenType != tcUnknown) && (tokenType != runeType) {
 			// We've stumbled into the next token; backtrack
 			g.input.UnreadRune()
-			break consumer
+			break
 		}
 
 		tokenType = runeType
@@ -106,7 +105,8 @@ consumer:
 	}
 
 	if err != nil {
-		// Ensure this is set back, in case an error occured after these were set in "the loop" (EOF errors don't count)
+		// Ensure this is set back, in case an error occured after these were set in "le grand loop" (EOF errors don't
+		// count)
 		g.token = ""
 		g.tokenType = tcUnknown
 		return err
@@ -117,10 +117,7 @@ consumer:
 
 	if tokenType == tcEscaper {
 		// Escapers should never be yielded; recurse to find the next token
-		Logger.Tracef("[Tokeniser] parse() got tcEscaper; recursing")
 		err = g.parse()
-	} else {
-		Logger.Tracef("[Tokeniser] parse() result: err %v, token %v, tokenType %v", err, g.token, g.tokenType)
 	}
 
 	return err

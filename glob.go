@@ -41,12 +41,9 @@ func init() {
 
 type parserState struct {
 	options *Options
-	// Filled during parsing, before the regular expression is compiled
-	regexBuffer *bytes.Buffer
 	// The regex-escaped separator character
 	escapedSeparator string
-	// Index of the current token
-	tokenIndex int
+	tokenIndex       int
 }
 
 // GlobMatcher is the basic interface of a Glob or GlobSet. It provides a Regexp-style interface for checking matches.
@@ -125,14 +122,14 @@ func Compile(pattern string, options *Options) (Glob, error) {
 		globPattern: pattern,
 		negated:     false,
 		parserState: &parserState{
-			regexBuffer:      new(bytes.Buffer),
 			options:          options,
 			escapedSeparator: escapeRegexComponent(string(options.Separator)),
 		},
 	}
 
+	regexBuf := new(bytes.Buffer)
 	if options.MatchAtStart {
-		glob.parserState.regexBuffer.WriteRune('^')
+		regexBuf.WriteRune('^')
 	}
 
 	var err error
@@ -145,30 +142,47 @@ func Compile(pattern string, options *Options) (Glob, error) {
 
 	// 2. Tokenise and convert!
 	tokeniser := newGlobTokeniser(strings.NewReader(pattern), options)
-	lastTokenType := tcUnknown
-	for i := 0; tokeniser.Scan(); i++ {
+	state := glob.parserState
+	components := make([]*bytes.Buffer, 0)
+	componentTypes := make([]tc, 0)
+
+	i := 0
+	for tokeniser.Scan() {
 		if err = tokeniser.Err(); err != nil {
 			return nil, err
 		}
 
 		token, tokenType := tokeniser.Token()
-		tokenBuffer := new(bytes.Buffer)
-		glob.parserState.tokenIndex = i
 
-		if tokenType == tcGlobStar && lastTokenType == tcGlobStar {
+		if tokenType == tcSeparator && i > 0 && componentTypes[i-1] == tcGlobStar {
+			// Skip the separator after a globstar
 			continue
-		} else if err = processToken(token, tokenType, glob, tokenBuffer); err != nil {
-			return nil, err
-		} else {
-			tokenBuffer.WriteTo(glob.parserState.regexBuffer)
+		} else if tokenType == tcGlobStar && i > 0 && componentTypes[i-1] == tcSeparator {
+			// Remove the separator before a globstar
+			components = components[:i-2]
+			componentTypes = componentTypes[:i-2]
+			continue
 		}
+
+		state.tokenIndex = i
+		component, err := processToken(token, tokenType, glob)
+		if err != nil {
+			return nil, err
+		}
+		components = append(components, component)
+		componentTypes = append(componentTypes, tokenType)
+		i++
+	}
+
+	for _, b := range components {
+		b.WriteTo(regexBuf)
 	}
 
 	if options.MatchAtEnd {
-		glob.parserState.regexBuffer.WriteRune('$')
+		regexBuf.WriteRune('$')
 	}
 
-	regexString := glob.parserState.regexBuffer.String()
+	regexString := regexBuf.String()
 	Logger.Infof("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
 	re, err := regexp.Compile(regexString)
 	if err != nil {
@@ -197,11 +211,14 @@ func parseNegation(pattern string, glob *globImpl) (string, error) {
 	return pattern[negations:], nil
 }
 
-func processToken(token string, tokenType tc, glob *globImpl, buf *bytes.Buffer) error {
+func processToken(token string, tokenType tc, glob *globImpl) (*bytes.Buffer, error) {
 	state := glob.parserState
+	buf := new(bytes.Buffer)
 
 	switch tokenType {
 	case tcGlobStar:
+		// Globstars also take care of surrounding separators; separator components before and after a globstar are
+		// suppressed
 		buf.WriteString("(?:")
 		if state.tokenIndex > 0 {
 			buf.WriteString(state.escapedSeparator)
@@ -221,5 +238,5 @@ func processToken(token string, tokenType tc, glob *globImpl, buf *bytes.Buffer)
 		buf.WriteString(escapeRegexComponent(token))
 	}
 
-	return nil
+	return buf, nil
 }
