@@ -60,9 +60,8 @@ func separatorsScanner(separators []rune) func(data []byte, atEOF bool) (int, []
 	}
 }
 
-// EscapeGlobComponent will return an escaped version the passed string, ensuring a literal match when used as part of
-// a pattern.
-func EscapeGlobComponent(component string, options *Options) (escapedComponent string) {
+// EscapeGlobComponent returns an escaped version of the passed string, ensuring a literal match when used in a pattern.
+func EscapeGlobComponent(component string, options *Options) string {
 	if options == nil {
 		options = DefaultOptions
 	}
