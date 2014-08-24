@@ -247,7 +247,7 @@ func processToken(token string, tokenType tc, glob *globImpl, tokeniser *globTok
 		// suppressed
 		isLast := !tokeniser.Peek()
 		buf.WriteString("(?:")
-		if isLast {
+		if isLast && len(glob.parserState.processedTokens) > 0 {
 			buf.WriteString(state.escapedSeparator)
 		}
 		buf.WriteString(".+")
