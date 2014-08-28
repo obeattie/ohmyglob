@@ -13,7 +13,7 @@ used to match strings.
 
 * Customisable separators
 * `*` matches any number of characters, but not the separator
-* `?` matches a single character, but not the separator
+* `?` matches any *single* character, but not the separator
 * `!` at the beginning of a pattern will negate the match
 * `\` escapes the next character – `\\` is a literal backslash
 * ["Globstar"](http://www.linuxjournal.com/content/globstar-new-bash-globbing-option) (`**`) matching
