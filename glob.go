@@ -119,6 +119,8 @@ func popLastToken(state *parserState) *processedToken {
 // used.
 func Compile(pattern string, options *Options) (Glob, error) {
 	pattern = strings.TrimSpace(pattern)
+	reader := strings.NewReader(pattern)
+
 	if options == nil {
 		options = DefaultOptions
 	} else {
@@ -150,13 +152,13 @@ func Compile(pattern string, options *Options) (Glob, error) {
 	var err error
 	// Transform into a regular expression pattern
 	// 1. Parse negation prefixes
-	pattern, err = parseNegation(pattern, glob)
+	err = parseNegation(reader, glob)
 	if err != nil {
 		return nil, err
 	}
 
 	// 2. Tokenise and convert!
-	tokeniser := newGlobTokeniser(strings.NewReader(pattern), options)
+	tokeniser := newGlobTokeniser(reader, options)
 	lastProcessedToken := &processedToken{}
 	for tokeniser.Scan() {
 		if err = tokeniser.Err(); err != nil {
@@ -221,20 +223,19 @@ func Compile(pattern string, options *Options) (Glob, error) {
 	return glob, nil
 }
 
-func parseNegation(pattern string, glob *globImpl) (string, error) {
-	if pattern == "" {
-		return pattern, nil
-	}
+func parseNegation(r io.RuneScanner, glob *globImpl) error {
+	for {
+		char, _, err := r.ReadRune()
 
-	negations := 0
-	for _, char := range pattern {
-		if char == '!' {
+		if err != nil {
+			return err
+		} else if char == '!' {
 			glob.negated = !glob.negated
-			negations++
+		} else {
+			r.UnreadRune()
+			return nil
 		}
 	}
-
-	return pattern[negations:], nil
 }
 
 func processToken(token string, tokenType tc, glob *globImpl, tokeniser *globTokeniser) (*bytes.Buffer, error) {
