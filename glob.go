@@ -211,7 +211,7 @@ func Compile(pattern string, options *Options) (Glob, error) {
 	}
 
 	regexString := regexBuf.String()
-	Logger.Infof("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
+	Logger.Tracef("[ohmyglob:Glob] Compiled \"%s\" to regex `%s` (negated: %v)", pattern, regexString, glob.negated)
 	re, err := regexp.Compile(regexString)
 	if err != nil {
 		return nil, err
