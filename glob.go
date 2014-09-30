@@ -16,12 +16,12 @@ var (
 	// Logger is used to log trace-level info; logging is completely disabled by default but can be changed by replacing
 	// this with a configured logger
 	Logger log.LoggerInterface
+	// Escaper is the character used to escape a meaningful character
+	Escaper = '\\'
 	// Runes that, in addition to the separator, mean something when they appear in the glob (includes Escaper)
 	expanders = []rune{'?', '*', Escaper}
 	// Map built from expanders
 	expandersMap map[rune]bool
-	// Escaper is the character used to escape a meaningful character
-	Escaper = '\\'
 )
 
 func init() {

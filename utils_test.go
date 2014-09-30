@@ -71,3 +71,18 @@ func TestEscapeGlobComponent(t *testing.T) {
 		assert.Equal(t, result, EscapeGlobComponent(src, DefaultOptions))
 	}
 }
+
+func TestEscapeGlobString(t *testing.T) {
+	expectations := map[string]string{
+		`foobar`:                 `foobar`,
+		`foo/bar`:                `foo/bar`,
+		`foobarbaz*/foobar`:      `foobarbaz\*/foobar`,
+		`.*////.**/foobar///baz`: `.\*////.\*\*/foobar///baz`,
+		`\foobar`:                `\\foobar`,
+		`/∆≈¨´∂#ª˙ƒ¨∞˙**®´∆¢#º....///..∂˚ø´∂˚®≥...`: `/∆≈¨´∂#ª˙ƒ¨∞˙\*\*®´∆¢#º....///..∂˚ø´∂˚®≥...`,
+	}
+
+	for src, result := range expectations {
+		assert.Equal(t, result, EscapeGlobString(src, DefaultOptions))
+	}
+}

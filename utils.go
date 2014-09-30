@@ -66,10 +66,9 @@ func EscapeGlobComponent(component string, options *Options) string {
 		options = DefaultOptions
 	}
 
-	runesToEscape := make([]rune, 0, len(expanders)+2)
+	runesToEscape := make([]rune, 0, len(expanders)+1)
 	runesToEscape = append(runesToEscape, expanders...)
 	runesToEscape = append(runesToEscape, options.Separator)
-	runesToEscape = append(runesToEscape, Escaper)
 
 	runesToEscapeMap := make(map[string]bool, len(runesToEscape))
 	for _, r := range runesToEscape {
@@ -85,6 +84,32 @@ func EscapeGlobComponent(component string, options *Options) string {
 			buf.WriteRune(Escaper)
 		}
 		buf.WriteString(component)
+	}
+
+	return buf.String()
+}
+
+// EscapeGlobString returns an escaped version of the passed string, ensuring a literal match of its components.
+// As distinct to EscapeGlobComponent, it will not escape the separator
+func EscapeGlobString(gs string, options *Options) string {
+	if options == nil {
+		options = DefaultOptions
+	}
+
+	runesToEscapeMap := make(map[string]bool, len(expanders))
+	for _, r := range expanders {
+		runesToEscapeMap[string(r)] = true
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(gs))
+	scanner.Split(separatorsScanner(expanders))
+	buf := new(bytes.Buffer)
+	for scanner.Scan() {
+		part := scanner.Text()
+		if runesToEscapeMap[part] {
+			buf.WriteRune(Escaper)
+		}
+		buf.WriteString(part)
 	}
 
 	return buf.String()
