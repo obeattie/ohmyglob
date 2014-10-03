@@ -65,6 +65,7 @@ func TestEscapeGlobComponent(t *testing.T) {
 		`.*////.**/foobar///baz`: `.\*\/\/\/\/.\*\*\/foobar\/\/\/baz`,
 		`\foobar`:                `\\foobar`,
 		`/∆≈¨´∂#ª˙ƒ¨∞˙**®´∆¢#º....///..∂˚ø´∂˚®≥...`: `\/∆≈¨´∂#ª˙ƒ¨∞˙\*\*®´∆¢#º....\/\/\/..∂˚ø´∂˚®≥...`,
+		`!ADMIN`: `\!ADMIN`,
 	}
 
 	for src, result := range expectations {

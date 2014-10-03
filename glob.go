@@ -19,17 +19,10 @@ var (
 	// Escaper is the character used to escape a meaningful character
 	Escaper = '\\'
 	// Runes that, in addition to the separator, mean something when they appear in the glob (includes Escaper)
-	expanders = []rune{'?', '*', Escaper}
-	// Map built from expanders
-	expandersMap map[rune]bool
+	expanders = []rune{'?', '*', '!', Escaper}
 )
 
 func init() {
-	expandersMap = make(map[rune]bool, len(expanders))
-	for _, r := range expanders {
-		expandersMap[r] = true
-	}
-
 	if Logger == nil {
 		var err error
 		Logger, err = log.LoggerFromWriterWithMinLevel(os.Stderr, log.CriticalLvl) // seelog bug means we can't use log.Off
