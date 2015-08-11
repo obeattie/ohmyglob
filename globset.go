@@ -16,6 +16,9 @@ type GlobSet interface {
 	// MatchingGlob returns the Glob that matches the specified pattern (or does not match, in the case of a negative
 	// glob)
 	MatchingGlob(b []byte) Glob
+	// AllMatchingGlobs returns all Globs that match the specified pattern (or do not match, in the case of a negative
+	// glob)
+	AllMatchingGlobs(b []byte) []Glob
 }
 
 type globSetImpl []Glob
@@ -47,6 +50,17 @@ func (g globSetImpl) MatchingGlob(b []byte) Glob {
 	}
 
 	return nil
+}
+
+func (g globSetImpl) AllMatchingGlobs(b []byte) []Glob {
+	result := []Glob(nil)
+	for _, glob := range g {
+		if glob.Match(b) {
+			Logger.Tracef("[ohmyglob:GlobSet] %s matched to %s", string(b), glob.String())
+			result = append(result, glob)
+		}
+	}
+	return result
 }
 
 func (g globSetImpl) Match(b []byte) bool {

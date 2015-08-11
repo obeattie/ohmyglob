@@ -76,3 +76,25 @@ func TestGlobSet_MatchReader(t *testing.T) {
 	matchReader = strings.NewReader(match)
 	assert.False(t, set.MatchReader(matchReader), "(%s) should not match %s", set.String(), match)
 }
+
+func TestGlobSet_AllMatchingGlobs(t *testing.T) {
+	patterns := []string{
+		"foo/**/baz",
+		"!foo/notme/baz",
+		"!foo/butyesme/baz",
+		"foo/butyesme/baz",
+		"!foo/notme/baz",
+		"!foo/*/baz/foo/**",
+	}
+	set, err := CompileGlobSet(patterns, DefaultOptions)
+	assert.NoError(t, err)
+
+	match := []byte("foo/notme/baz")
+	assert.Len(t, set.AllMatchingGlobs(match), 3)
+	match = []byte("foo/butyesme/baz")
+	assert.Len(t, set.AllMatchingGlobs(match), 3)
+	match = []byte("foo/yes/baz/foo/123")
+	assert.Len(t, set.AllMatchingGlobs(match), 1)
+	match = []byte("foo/yes/baz/foo/123/baz")
+	assert.Len(t, set.AllMatchingGlobs(match), 2)
+}
